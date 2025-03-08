@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Moon Lander</title>
+    <style>
+        body {
+            margin: 0;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #hints {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: lightgrey;
+            /* Light grey color */
+            font-size: 12px;
+            /* Smaller font size */
+            font-family: monospace;
+            /* Fixed width font */
+        }
+
+        #message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 24px;
+            display: none;
+            background-color: rgba(0, 0, 0, 0.7);
+            /* Semi-transparent background */
+            padding: 20px;
+            border-radius: 10px;
+            font-family: monospace;
+            /* Fixed width font */
+            text-align: center;
+        }
+
+        #play-again {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        #hud {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: lightgrey;
+            /* Light grey color */
+            font-size: 16px;
+            font-family: monospace;
+            /* Fixed width font */
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.module.js"
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <div id="hints">Controls: A - Rotate Left, D - Rotate Right, S - Thrust</div>
+    <div id="message"></div>
+    <div id="hud"></div>
+    <script type="module">
+        import * as THREE from 'three';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 8; // Adjusted for better view
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Terrain generation
+        const terrainWidth = 1000;
+        const terrainSegments = 1000;
+        const heights = [];
+        const flatPads = [];
+        let isFlat = false;
+        let startFlat = 0;
+        for (let i = 0; i <= terrainSegments; i++) {
+            const x = i * terrainWidth / terrainSegments - terrainWidth / 2;
+            const padCycle = Math.floor((x + terrainWidth / 2) / 4);
+            if (padCycle % 2 === 0) {
+                // Uneven terrain with craters
+                heights[i] = Math.sin(x / 20) * 0.5 + (Math.random() > 0.8 ? -2 : 0); // Increased curvature and more frequent craters
+                if (isFlat) {
+                    flatPads.push([startFlat, x - terrainWidth / terrainSegments]);
+                    isFlat = false;
+                }
+            } else {
+                // Flat landing pad
+                if (!isFlat) {
+                    startFlat = x;
+                    isFlat = true;
+                }
+                heights[i] = 0;
+            }
+        }
+        if (isFlat) {
+            flatPads.push([startFlat, terrainWidth / 2]);
+        }
+
+        // Create terrain geometry using BufferGeometry
+        const terrainVertices = [];
+        const terrainIndices = [];
+        for (let i = 0; i <= terrainSegments; i++) {
+            const x = i * terrainWidth / terrainSegments - terrainWidth / 2;
+            terrainVertices.push(x, heights[i], 0);
+            terrainVertices.push(x, -10, 0);
+            if (i < terrainSegments) {
+                const a = i * 2;
+                const b = i * 2 + 1;
+                const c = (i + 1) * 2;
+                const d = (i + 1) * 2 + 1;
+                terrainIndices.push(a, b, c);
+                terrainIndices.push(b, d, c);
+            }
+        }
+        const terrainGeometry = new THREE.BufferGeometry();
+        terrainGeometry.setAttribute('position', new THREE.Float32BufferAttribute(terrainVertices, 3));
+        terrainGeometry.setIndex(terrainIndices);
+        terrainGeometry.computeVertexNormals();
+        const terrainMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
+        const terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
+        scene.add(terrain);
+
+        // Add rocks on uneven terrain
+        for (let i = 0; i < 50; i++) {
+            const x = (Math.random() - 0.5) * terrainWidth;
+            let isOnFlat = false;
+            for (const pad of flatPads) {
+                if (x >= pad[0] && x <= pad[1]) {
+                    isOnFlat = true;
+                    break;
+                }
+            }
+            if (!isOnFlat) {
+                const terrainXIndex = Math.floor((x + terrainWidth / 2) / (terrainWidth / terrainSegments));
+                const y = heights[terrainXIndex];
+                const rockGeometry = new THREE.SphereGeometry(Math.random() * 0.5 + 0.2, 8, 8);
+                const rockMaterial = new THREE.MeshBasicMaterial({ color: 0x666666 });
+                const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+                rock.position.set(x, y + rockGeometry.parameters.radius, 0);
+                scene.add(rock);
+            }
+        }
+
+        // Lander
+        const landerGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 16);
+        const landerMaterial = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.9, roughness: 0.5 }); // Reflective gold material
+        const lander = new THREE.Mesh(landerGeometry, landerMaterial);
+        lander.position.set(0, 5, 0); // Start closer to the surface
+        scene.add(lander);
+
+        // Indicator Light
+        const indicatorGeometry = new THREE.BoxGeometry(0.1, 0.05, 0.02); // Rectangular shape
+        const indicatorMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+        const indicatorLight = new THREE.Mesh(indicatorGeometry, indicatorMaterial);
+        indicatorLight.position.set(0, 0, 0.55); // Positioned on the face towards the camera
+        lander.add(indicatorLight);
+
+        // Main Rocket Nozzle
+        const nozzleGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.1, 8); // Shorter nozzle
+        const nozzleMaterial = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 1, roughness: 0.3 }); // Shiny metal material
+        const bottomNozzle = new THREE.Mesh(nozzleGeometry, nozzleMaterial);
+        bottomNozzle.position.set(0, -0.55, 0); // Adjusted position to extend less far from the bottom
+        lander.add(bottomNozzle);
+
+        // Main Rocket Flame
+        const flameGeometry = new THREE.ConeGeometry(0.05, 0.25, 8); // Smaller flame
+        const flameMaterial = new THREE.MeshBasicMaterial({ color: 0xffdd00 });
+        const flame = new THREE.Mesh(flameGeometry, flameMaterial);
+        flame.position.set(0, -0.65, 0); // Adjusted position
+        flame.rotation.x = Math.PI;
+        flame.visible = false; // Initially hidden
+        lander.add(flame);
+
+        // Main Rocket Flame Light
+        const mainFlameLight = new THREE.PointLight(0xffdd00, 1, 5); // Yellow light
+        mainFlameLight.position.set(0, -0.75, 0); // Positioned below the main flame
+        mainFlameLight.visible = false; // Initially hidden
+        lander.add(mainFlameLight);
+
+        // Side Rocket Nozzles
+        const leftNozzle = new THREE.Mesh(nozzleGeometry, nozzleMaterial);
+        const rightNozzle = new THREE.Mesh(nozzleGeometry, nozzleMaterial);
+        leftNozzle.position.set(-0.5, -0.45, 0); // Adjusted position to bottom left corner, slightly above the bottom
+        rightNozzle.position.set(0.5, -0.45, 0); // Adjusted position to bottom right corner, slightly above the bottom
+        lander.add(leftNozzle);
+        lander.add(rightNozzle);
+
+        // Side Rocket Flames
+        const sideFlameGeometry = new THREE.ConeGeometry(0.05, 0.2, 8);
+        const sideFlameMaterial = new THREE.MeshBasicMaterial({ color: 0xffdd00 });
+        const leftFlame = new THREE.Mesh(sideFlameGeometry, sideFlameMaterial);
+        const rightFlame = new THREE.Mesh(sideFlameGeometry, sideFlameMaterial);
+        leftFlame.position.set(-0.15, 0, 0); // Adjusted position
+        rightFlame.position.set(0.15, 0, 0); // Adjusted position
+        leftFlame.rotation.z = Math.PI / 2; // Pointing left
+        rightFlame.rotation.z = -Math.PI / 2; // Pointing right
+        leftFlame.visible = false; // Initially hidden
+        rightFlame.visible = false; // Initially hidden
+        leftNozzle.add(leftFlame);
+        rightNozzle.add(rightFlame);
+
+        // Side Rocket Flame Lights
+        const leftFlameLight = new THREE.PointLight(0xffdd00, 1, 5); // Yellow light
+        const rightFlameLight = new THREE.PointLight(0xffdd00, 1, 5); // Yellow light
+        leftFlameLight.position.set(-0.15, -0.2, 0); // Positioned near the left flame
+        rightFlameLight.position.set(0.15, -0.2, 0); // Positioned near the right flame
+        leftFlameLight.visible = false; // Initially hidden
+        rightFlameLight.visible = false; // Initially hidden
+        leftNozzle.add(leftFlameLight);
+        rightNozzle.add(rightFlameLight);
+
+        // Indicator Light Source
+        const indicatorLightSource = new THREE.PointLight(0x00ff00, 1, 5); // Green light
+        indicatorLightSource.position.set(0, 0, 0.55); // Positioned at the indicator light
+        indicatorLightSource.visible = false; // Initially hidden
+        lander.add(indicatorLightSource);
+
+        // Antenna
+        const antennaGeometry = new THREE.CylinderGeometry(0.02, 0.02, 1, 8);
+        const antennaMaterial = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 1, roughness: 0.3 }); // Shiny metal material
+        const antenna = new THREE.Mesh(antennaGeometry, antennaMaterial);
+        antenna.position.set(0, 0.5, 0); // Positioned at the top of the lander
+        lander.add(antenna);
+
+        // Red Flashing Light
+        const redLightGeometry = new THREE.SphereGeometry(0.05, 8, 8);
+        const redLightMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const redLight = new THREE.Mesh(redLightGeometry, redLightMaterial);
+        redLight.position.set(0, 0.5, 0); // Positioned at the top of the antenna
+        antenna.add(redLight);
+
+        // Red Flashing Light Source
+        const redLightSource = new THREE.PointLight(0xff0000, 1, 5); // Red light
+        redLightSource.position.set(0, 0.5, 0); // Positioned at the red light
+        redLightSource.visible = false; // Initially hidden
+        antenna.add(redLightSource);
+
+        // Legs
+        const legGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.3, 8);
+        const legMaterial = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 1, roughness: 0.3 }); // Shiny metal material
+        const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
+        const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
+        leftLeg.position.set(-0.3, -0.6, 0); // Adjusted position
+        rightLeg.position.set(0.3, -0.6, 0); // Adjusted position
+        lander.add(leftLeg);
+        lander.add(rightLeg);
+
+        // Feet
+        const footGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.05, 8);
+        const leftFoot = new THREE.Mesh(footGeometry, legMaterial);
+        const rightFoot = new THREE.Mesh(footGeometry, legMaterial);
+        leftFoot.position.set(0, -0.15, 0); // Adjusted position
+        rightFoot.position.set(0, -0.15, 0); // Adjusted position
+        leftLeg.add(leftFoot);
+        rightLeg.add(rightFoot);
+
+        // Add light sources
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Soft white light
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 10, 7.5);
+        scene.add(directionalLight);
+
+        const sideLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        sideLight.position.set(-10, 0, 0); // Light from the side
+        scene.add(sideLight);
+
+        // Physics
+        let velocity = new THREE.Vector3(1, 0, 0); // Initial horizontal velocity
+        let angularVelocity = 0;
+        const gravity = new THREE.Vector3(0, -0.04, 0); // Doubled gravity
+        const thrust = 0.5; // Increased thrust
+        const torque = 0.5; // Increased torque
+
+        // Game state
+        let gameState = 'playing';
+
+        // Keyboard input
+        const keys = {};
+        window.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+            console.log(`Key down: ${e.key.toLowerCase()}`); // Debugging log
+        });
+        window.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+            console.log(`Key up: ${e.key.toLowerCase()}`); // Debugging log
+        });
+
+        // Clock for deltaTime and flight time
+        const clock = new THREE.Clock();
+        let flightTime = 0;
+
+        // Background stars
+        const starGeometry = new THREE.BufferGeometry();
+        const starPositions = [];
+        for (let i = 0; i < 1000; i++) {
+            const x = (Math.random() - 0.5) * 2000;
+            const y = (Math.random() - 0.5) * 2000;
+            const z = (Math.random() - 0.5) * 2000;
+            starPositions.push(x, y, z);
+        }
+        starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+        const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 2.5 }); // Bigger and brighter stars
+        const stars = new THREE.Points(starGeometry, starMaterial);
+        scene.add(stars);
+
+        // Earth
+        const earthGeometry = new THREE.SphereGeometry(10, 32, 32); // Smaller earth
+        const earthMaterial = new THREE.MeshStandardMaterial({ color: 0x0000ff, metalness: 1, roughness: 0.9 }); // Reflective like water
+        const earth = new THREE.Mesh(earthGeometry, earthMaterial);
+        earth.position.set(100, 50, -100);
+        scene.add(earth);
+
+        // Rainbow stars for winning
+        let rainbowStars = null;
+        function createRainbowStars() {
+            const rsGeometry = new THREE.BufferGeometry();
+            const rsPositions = [];
+            const rsColors = [];
+            for (let i = 0; i < 1000; i++) { // Increased number of stars
+                rsPositions.push((Math.random() - 0.5) * 2000, (Math.random() - 0.5) * 2000, (Math.random() - 0.5) * 2000);
+                const color = new THREE.Color().setHSL(i / 1000, 1, 0.5);
+                rsColors.push(color.r, color.g, color.b);
+            }
+            rsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(rsPositions, 3));
+            rsGeometry.setAttribute('color', new THREE.Float32BufferAttribute(rsColors, 3));
+            const rsMaterial = new THREE.PointsMaterial({ size: 3, vertexColors: true }); // Increased size for visibility
+            rainbowStars = new THREE.Points(rsGeometry, rsMaterial);
+            scene.add(rainbowStars);
+        }
+
+        // Function to check if the lander is above flat terrain
+        function isLanderAboveFlatTerrain(landerX, flatPads) {
+            for (const pad of flatPads) {
+                if (landerX >= pad[0] && landerX <= pad[1]) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Function to calculate lander altitude
+        function calculateAltitude(lander, heights, terrainWidth, terrainSegments) {
+            const landerBox = new THREE.Box3().setFromObject(lander);
+            const landerMinY = landerBox.min.y;
+            const terrainHeight = heights[Math.floor((lander.position.x + terrainWidth / 2) / (terrainWidth / terrainSegments))];
+            return landerMinY - terrainHeight;
+        }
+
+        // Function to restart the game
+        window.reloadGame = function () {
+            location.reload(); // Reload the page to restart the game from the beginning
+        }
+
+        // Function to flash a circular shape over the lander
+        function flashCrashIndicator() {
+            const crashIndicatorGeometry = new THREE.CircleGeometry(1, 32);
+            const crashIndicatorMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const crashIndicator = new THREE.Mesh(crashIndicatorGeometry, crashIndicatorMaterial);
+            crashIndicator.position.copy(lander.position);
+            scene.add(crashIndicator);
+
+            let flashCount = 0;
+            const flashInterval = setInterval(() => {
+                crashIndicator.visible = !crashIndicator.visible;
+                flashCount++;
+                if (flashCount >= 6) { // Flash three times
+                    clearInterval(flashInterval);
+                    scene.remove(crashIndicator);
+                    document.getElementById('message').innerHTML = 'Game Over<br><button id="play-again" onclick="reloadGame();">Play Again</button>';
+                    document.getElementById('message').style.display = 'block';
+                }
+            }, 200);
+        }
+
+        // HUD
+        const hud = document.getElementById('hud');
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            const deltaTime = clock.getDelta();
+
+            if (gameState === 'playing') {
+                // Apply controls
+                if (keys['a']) {
+                    angularVelocity += torque * deltaTime; // Rotate clockwise
+                    console.log('Firing left rocket'); // Debugging log
+                    leftFlame.visible = true; // Show left flame when rotating clockwise
+                    leftFlameLight.visible = true; // Show left flame light when rotating clockwise
+                } else {
+                    leftFlame.visible = false; // Hide left flame when not rotating clockwise
+                    leftFlameLight.visible = false; // Hide left flame light when not rotating clockwise
+                }
+                if (keys['d']) {
+                    angularVelocity -= torque * deltaTime; // Rotate counterclockwise
+                    console.log('Firing right rocket'); // Debugging log
+                    rightFlame.visible = true; // Show right flame when rotating counterclockwise
+                    rightFlameLight.visible = true; // Show right flame light when rotating counterclockwise
+                } else {
+                    rightFlame.visible = false; // Hide right flame when not rotating counterclockwise
+                    rightFlameLight.visible = false; // Hide right flame light when not rotating counterclockwise
+                }
+                if (keys['s']) {
+                    const thrustVector = new THREE.Vector3(0, thrust, 0).applyQuaternion(lander.quaternion);
+                    velocity.add(thrustVector.multiplyScalar(deltaTime));
+                    console.log('Applying thrust'); // Debugging log
+                    flame.visible = true; // Show flame when thrusting
+                    mainFlameLight.visible = true; // Show main flame light when thrusting
+                } else {
+                    flame.visible = false; // Hide flame when not thrusting
+                    mainFlameLight.visible = false; // Hide main flame light when not thrusting
+                }
+
+                // Flashing indicator light
+                const indicatorVisible = Math.sin(clock.elapsedTime * 10) > 0;
+                indicatorLight.visible = indicatorVisible;
+                indicatorLightSource.visible = indicatorVisible;
+                redLight.visible = !indicatorVisible; // Alternate flashing
+                redLightSource.visible = !indicatorVisible; // Alternate flashing
+
+                // Update HUD
+                const isVertical = Math.abs(lander.rotation.z) < Math.PI / 180 * 6; // Doubled tolerance for angle
+                const isSlowVertical = Math.abs(velocity.y) < 0.2; // Doubled tolerance for vertical speed
+                const isSlowHorizontal = Math.abs(velocity.x) < 0.1; // Doubled tolerance for horizontal speed
+
+                const angleStyle = isVertical ? 'style="color: green; font-weight: bold;"' : 'style="color: red;"';
+                const verticalVelocityStyle = isSlowVertical ? 'style="color: green; font-weight: bold;"' : 'style="color: red;"';
+                const horizontalVelocityStyle = isSlowHorizontal ? 'style="color: green; font-weight: bold;"' : 'style="color: red;"';
+
+                const altitude = calculateAltitude(lander, heights, terrainWidth, terrainSegments);
+                const altitudeStyle = altitude > 0 ? 'style="color: green; font-weight: bold;"' : 'style="color: red;"';
+
+                // Check if above flat terrain
+                const isAboveFlat = isLanderAboveFlatTerrain(lander.position.x, flatPads);
+                const terrainFlatText = isAboveFlat ? 'Terrain: Flat' : 'Terrain: Uneven';
+                const terrainFlatStyle = isAboveFlat ? 'style="color: green; font-weight: bold;"' : 'style="color: red;"';
+
+                // Update flight time
+                flightTime += deltaTime;
+                const flightTimeStyle = 'style="color: lightgrey;"';
+
+                hud.innerHTML = `
+                    <span ${horizontalVelocityStyle}>Horizontal Velocity: ${velocity.x.toFixed(2)}</span><br>
+                    <span ${verticalVelocityStyle}>Vertical Velocity: ${velocity.y.toFixed(2)}</span><br>
+                    <span ${angleStyle}>Angle: ${(lander.rotation.z * (180 / Math.PI)).toFixed(2)}°</span><br>
+                    <span ${angleStyle}>Angular Velocity: ${(angularVelocity * (180 / Math.PI)).toFixed(2)}°/s</span><br>
+                    <span ${altitudeStyle}>Altitude: ${altitude.toFixed(2)}</span><br>
+                    <span ${terrainFlatStyle}>${terrainFlatText}</span><br>
+                    <span ${flightTimeStyle}>Flight Time: ${flightTime.toFixed(2)}s</span>
+                `;
+
+                // Apply gravity
+                velocity.add(gravity.clone().multiplyScalar(deltaTime));
+
+                // Update position and rotation
+                lander.position.add(velocity.clone().multiplyScalar(deltaTime));
+                lander.rotation.z += angularVelocity * deltaTime;
+
+                // Ensure the angle of the lander does not exceed 180 degrees
+                if (lander.rotation.z > Math.PI) {
+                    lander.rotation.z -= 2 * Math.PI;
+                } else if (lander.rotation.z < -Math.PI) {
+                    lander.rotation.z += 2 * Math.PI;
+                }
+
+                // Check collision with terrain and rocks
+                const landerX = lander.position.x;
+                const terrainXIndex = Math.floor((landerX + terrainWidth / 2) / (terrainWidth / terrainSegments));
+                if (terrainXIndex >= 0 && terrainXIndex < heights.length) {
+                    const terrainHeight = heights[terrainXIndex];
+                    if (calculateAltitude(lander, heights, terrainWidth, terrainSegments) <= 0) { // Base of lander feet
+                        // Check if on flat pad
+                        const isOnFlat = isLanderAboveFlatTerrain(landerX, flatPads);
+                        // Check landing conditions
+                        const isVertical = Math.abs(lander.rotation.z) < Math.PI / 180 * 6; // Doubled tolerance for angle
+                        const isSlowVertical = Math.abs(velocity.y) < 0.2; // Doubled tolerance for vertical speed
+                        const isSlowHorizontal = Math.abs(velocity.x) < 0.1; // Doubled tolerance for horizontal speed
+                        if (isOnFlat && isVertical && isSlowVertical && isSlowHorizontal) {
+                            gameState = 'landed';
+                            lander.rotation.z = 0; // Make the lander vertical
+                            document.getElementById('message').innerHTML = 'The Eagle Has Landed<br><button id="play-again" onclick="reloadGame()">Play Again</button>';
+                            document.getElementById('message').style.display = 'block';
+                            createRainbowStars();
+                        } else {
+                            gameState = 'crashed';
+                            lander.rotation.z = Math.PI / 2; // Flip the lander on its side
+                            flashCrashIndicator();
+                        }
+                    }
+                }
+
+                // Check collision with rocks (simplified bounding box check)
+                scene.children.forEach(child => {
+                    if (child.geometry instanceof THREE.SphereGeometry) {
+                        const dx = lander.position.x - child.position.x;
+                        const dy = lander.position.y - child.position.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        if (distance < 0.5 + child.geometry.parameters.radius) {
+                            gameState = 'crashed';
+                            lander.rotation.z = Math.PI / 2; // Flip the lander on its side
+                            flashCrashIndicator();
+                        }
+                    }
+                });
+
+                // Update camera position to follow lander horizontally
+                camera.position.x = lander.position.x;
+                camera.position.y = Math.max(lander.position.y, 5); // Keep terrain in view
+            }
+
+            // Update rainbow stars if they exist
+            if (rainbowStars) {
+                const positions = rainbowStars.geometry.attributes.position.array;
+                for (let i = 0; i < positions.length; i += 3) {
+                    positions[i] += 50 * deltaTime; // Move much quicker
+                    if (positions[i] > window.innerWidth / 2) {
+                        positions[i] = -window.innerWidth / 2; // Reset to left
+                    }
+                }
+                rainbowStars.geometry.attributes.position.needsUpdate = true;
+            }
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>
