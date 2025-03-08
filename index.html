@@ -80,6 +80,7 @@
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.z = 8; // Adjusted for better view
+        camera.position.y = 5; // Lowered the camera to be midway between the lander and the moon surface
         const renderer = new THREE.WebGLRenderer();
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
@@ -152,7 +153,7 @@
                 const terrainXIndex = Math.floor((x + terrainWidth / 2) / (terrainWidth / terrainSegments));
                 const y = heights[terrainXIndex];
                 const rockGeometry = new THREE.SphereGeometry(Math.random() * 0.5 + 0.2, 8, 8);
-                const rockMaterial = new THREE.MeshBasicMaterial({ color: 0x666666 });
+                const rockMaterial = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.8, metalness: 0.2 }); // Rougher material
                 const rock = new THREE.Mesh(rockGeometry, rockMaterial);
                 rock.position.set(x, y + rockGeometry.parameters.radius, 0);
                 scene.add(rock);
@@ -525,7 +526,8 @@
 
                 // Update camera position to follow lander horizontally
                 camera.position.x = lander.position.x;
-                camera.position.y = Math.max(lander.position.y, 5); // Keep terrain in view
+                camera.position.y = 2.5
+                //                camera.position.y = Math.max(lander.position.y, 5); // Keep terrain in view
             }
 
             // Update rainbow stars if they exist
