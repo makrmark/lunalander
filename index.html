@@ -63,16 +63,18 @@
     <script type="importmap">
         {
             "imports": {
-                "three": "https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.module.js"
-            }
+                "three": "https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.module.js"            }
         }
     </script>
 </head>
 
 <body>
-    <div id="hints">Controls: A - Rotate Left, D - Rotate Right, S - Thrust</div>
+    <div id="hints" style="display: none;">Controls: A - Rotate Left, D - Rotate Right, S - Thrust</div>
     <div id="message"></div>
     <div id="hud"></div>
+    <div id="joystick-container" style="position: absolute; bottom: 10px; left: 10px;"></div>
+    <!-- Joystick container -->
+    <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.10.2"></script>
     <script type="module">
         import * as THREE from 'three';
 
@@ -304,6 +306,35 @@
         window.addEventListener('keyup', (e) => {
             keys[e.key.toLowerCase()] = false;
             console.log(`Key up: ${e.key.toLowerCase()}`); // Debugging log
+        });
+
+        // Joystick setup
+        const joystick = nipplejs.create({
+            zone: document.getElementById('joystick-container'),
+            mode: 'static',
+            position: { left: '50px', bottom: '50px' },
+            color: 'white'
+        });
+
+        joystick.on('move', (evt, data) => {
+            const angle = data.angle.degree;
+            const distance = data.distance;
+
+            console
+
+            if (angle >= 45 && angle <= 135) {
+                keys['s'] = distance > 20; // Up: main rocket
+            } else if (angle > 135 && angle < 225) {
+                keys['a'] = distance > 20; // Left: rotate left
+            } else if ((angle > 315 && angle <= 360) || (angle >= 0 && angle < 45)) {
+                keys['d'] = distance > 20; // Right: rotate right
+            }
+        });
+
+        joystick.on('end', () => {
+            keys['a'] = false;
+            keys['d'] = false;
+            keys['s'] = false;
         });
 
         // Clock for deltaTime and flight time
@@ -545,6 +576,11 @@
             renderer.render(scene, camera);
         }
         animate();
+
+        // Show controls help text only on non-mobile devices
+        if (!/Mobi|Android/i.test(navigator.userAgent)) {
+            document.getElementById('hints').style.display = 'block';
+        }
 
         // Handle window resize
         window.addEventListener('resize', () => {
