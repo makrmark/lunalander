@@ -311,22 +311,27 @@
         // Joystick setup
         const joystick = nipplejs.create({
             zone: document.getElementById('joystick-container'),
+            size: 200,
             mode: 'static',
-            position: { left: '50px', bottom: '50px' },
+            position: { left: '150px', bottom: '150px' },
             color: 'white'
         });
 
         joystick.on('move', (evt, data) => {
+            keys['a'] = false;
+            keys['d'] = false;
+            keys['s'] = false;
+
             const angle = data.angle.degree;
             const distance = data.distance;
 
-            console
-
-            if (angle >= 45 && angle <= 135) {
+            if (angle >= 35 && angle <= 145) {
                 keys['s'] = distance > 20; // Up: main rocket
-            } else if (angle > 135 && angle < 225) {
+            }
+            if (angle > 115 && angle < 235) {
                 keys['a'] = distance > 20; // Left: rotate left
-            } else if ((angle > 315 && angle <= 360) || (angle >= 0 && angle < 45)) {
+            }
+            if ((angle > 325 && angle <= 360) || (angle >= 0 && angle < 55)) {
                 keys['d'] = distance > 20; // Right: rotate right
             }
         });
