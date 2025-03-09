@@ -72,6 +72,13 @@
             touch-action: none;
             z-index: 1000;
         }
+
+        /* Prevent clicks outside the joystick area on mobile devices */
+        @media (pointer: coarse) {
+            body {
+                overflow: hidden;
+            }
+        }
     </style>
     <script type="importmap">
         {
