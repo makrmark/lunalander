@@ -59,8 +59,6 @@
             font-size: 12px;
             font-family: monospace;
             /* Fixed width font */
-            user-select: none;
-            /* Prevent text selection */
         }
 
         #joystick-container {
@@ -84,8 +82,9 @@
 
         #hints,
         #hud {
-            user-select: none;
             /* Prevent text selection */
+            user-select: none;
+            -webkit-user-select: none;
         }
     </style>
     <script type="importmap">
