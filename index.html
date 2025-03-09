@@ -3,6 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Luna Lander</title>
     <style>
         body {
@@ -59,6 +60,18 @@
             font-family: monospace;
             /* Fixed width font */
         }
+
+        #joystick-container {
+            position: fixed;
+            bottom: 150px;
+            left: 150px;
+            width: 200px;
+            height: 200px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            touch-action: none;
+            z-index: 1000;
+        }
     </style>
     <script type="importmap">
         {
@@ -72,7 +85,7 @@
     <div id="hints" style="display: none;">Controls: A - Rotate Left, D - Rotate Right, S - Thrust</div>
     <div id="message"></div>
     <div id="hud"></div>
-    <div id="joystick-container" style="position: absolute; bottom: 10px; left: 10px;"></div>
+    <div id="joystick-container"></div>
     <!-- Joystick container -->
     <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.10.2"></script>
     <script type="module">
@@ -311,9 +324,14 @@
         // Joystick setup
         const joystick = nipplejs.create({
             zone: document.getElementById('joystick-container'),
-            size: 200,
             mode: 'static',
-            position: { left: '150px', bottom: '150px' },
+            size: 200,
+            dynamicPage: true,
+            lockY: false,
+            maxNumberOfNipples: 1,
+            dataOnly: false,
+            mode: 'static',
+            position: { left: '100px', bottom: '100px' },
             color: 'white'
         });
 
