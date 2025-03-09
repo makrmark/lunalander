@@ -14,6 +14,8 @@
             /* Safari */
             -ms-user-select: none;
             /* IE 10+ */
+            touch-action: none;
+            /* prevent pinch to zoom */
         }
 
         canvas {
@@ -636,7 +638,7 @@
                 // Adjust camera distance based on height
                 camera.position.z = CAMERA_INITIAL_POSITION_Z / heightFactor; // Zoom in as altitude decreases
                 // Adjust camera height based on lander position
-                camera.position.y = CAMERA_INITIAL_POSITION_Y / heightFactor; // Adjust vertical position
+                camera.position.y = lander.position.y // CAMERA_INITIAL_POSITION_Y / heightFactor; // Adjust vertical position
 
                 camera.updateProjectionMatrix(); // Update the camera projection matrix
 
