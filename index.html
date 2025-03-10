@@ -70,17 +70,6 @@
             /* IE 10+ */
         }
 
-        #hud {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            color: lightgrey;
-            /* Light grey color */
-            font-size: 12px;
-            font-family: monospace;
-            /* Fixed width font */
-        }
-
         #joystick-container {
             position: fixed;
             bottom: 50px;
@@ -107,10 +96,66 @@
         }
 
         #hints,
-        #hud {
+        #instrument-panel {
             /* Prevent text selection */
             user-select: none;
             -webkit-user-select: none;
+            -ms-user-select: none;
+        }
+
+        #instrument-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 200px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 10px;
+            font-family: monospace;
+            color: lightgrey;
+            user-select: none;
+            -webkit-user-select: none;
+            border: 2px solid lightgrey;
+            /* Light grey rounded border */
+        }
+
+        .instrument {
+            margin-bottom: 10px;
+        }
+
+        .instrument .label {
+            font-size: 12px;
+        }
+
+        .instrument .value {
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .green-zone {
+            color: green;
+        }
+
+        .red-zone {
+            color: red;
+        }
+
+        .grey-text {
+            color: grey;
+        }
+
+        .white-text {
+            color: white;
+        }
+
+        @media (min-width: 1024px) {
+            .instrument .label {
+                font-size: 14px;
+            }
+
+            .instrument .value {
+                font-size: 18px;
+            }
         }
     </style>
     <script type="importmap">
@@ -124,7 +169,29 @@
 <body>
     <div id="hints" style="display: none;">Controls: A - Rotate Left, D - Rotate Right, S - Thrust</div>
     <div id="message"></div>
-    <div id="hud"></div>
+    <div id="instrument-panel">
+        <div class="instrument">
+            <div class="label">Ground Speed:</div>
+            <div id="ground-speed" class="value">0.00</div>
+        </div>
+        <div class="instrument">
+            <div class="label">Altitude:</div>
+            <div id="altitude" class="white-text value">0.00 <span id="approach-speed" class="grey-text">(0.00)</span>
+            </div>
+        </div>
+        <div class="instrument">
+            <div class="label">Attitude:</div>
+            <div id="attitude" class="value">0.00° <span id="angular-velocity" class="grey-text">(0.00°/s)</span></div>
+        </div>
+        <div class="instrument">
+            <div class="label">Terrain:</div>
+            <div id="terrain-alert" class="value red-zone">Uneven</div>
+        </div>
+        <div class="instrument">
+            <div class="label">Flight Time:</div>
+            <div id="flight-time" class="value">0.00s</div>
+        </div>
+    </div>
     <div id="joystick-container"></div>
     <!-- Joystick container -->
     <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.10.2"></script>
@@ -355,7 +422,7 @@
         // Physics
         let velocity = new THREE.Vector3(1, 0, 0); // Initial horizontal velocity
         let angularVelocity = 0;
-        const gravity = new THREE.Vector3(0, -0.04, 0); // Doubled gravity
+        const gravity = new THREE.Vector3(0, -0.08, 0); // Gravity twice as strong
         const thrust = 0.5; // Increased thrust
         const torque = 0.5; // Increased torque
 
@@ -499,8 +566,37 @@
             }, 200);
         }
 
-        // HUD
-        const hud = document.getElementById('hud');
+        // Function to update the instrumentation panel
+        function updateInstrumentationPanel() {
+            const groundSpeed = velocity.x.toFixed(2);
+            const approachSpeed = velocity.y.toFixed(2);
+            const altitude = calculateAltitude(lander, heights, terrainWidth, terrainSegments).toFixed(2);
+            const attitude = (lander.rotation.z * (180 / Math.PI)).toFixed(2);
+            const angularVelocityValue = (angularVelocity * (180 / Math.PI)).toFixed(2);
+            const isAboveFlat = isLanderAboveFlatTerrain(lander.position.x, flatPads);
+            const flightTimeValue = flightTime.toFixed(2);
+
+            document.getElementById('ground-speed').innerText = `${groundSpeed}m/s`;
+            document.getElementById('altitude').innerHTML = `${altitude}m <span id="approach-speed">(${approachSpeed}m/s)</span>`;
+            document.getElementById('attitude').innerHTML = `${attitude}° <span class="white-text">(${angularVelocityValue}°/s)</span>`;
+            document.getElementById('flight-time').innerText = `${flightTimeValue}s`;
+
+            const terrainAlert = document.getElementById('terrain-alert');
+            if (isAboveFlat) {
+                terrainAlert.innerText = 'Flat';
+                terrainAlert.classList.remove('red-zone');
+                terrainAlert.classList.add('green-zone');
+            } else {
+                terrainAlert.innerText = 'Uneven';
+                terrainAlert.classList.remove('green-zone');
+                terrainAlert.classList.add('red-zone');
+            }
+
+            // Update colors based on landing conditions
+            document.getElementById('ground-speed').className = Math.abs(groundSpeed) < 0.1 ? 'value green-zone' : 'value red-zone';
+            document.getElementById('approach-speed').className = Math.abs(approachSpeed) < 0.2 ? 'green-zone' : 'red-zone';
+            document.getElementById('attitude').className = Math.abs(attitude) < 6 ? 'value green-zone' : 'value red-zone';
+        }
 
         // Animation loop
         function animate() {
@@ -545,36 +641,8 @@
                 redLight.visible = !indicatorVisible; // Alternate flashing
                 redLightSource.visible = !indicatorVisible; // Alternate flashing
 
-                // Update HUD
-                const isVertical = Math.abs(lander.rotation.z) < Math.PI / 180 * 6; // Doubled tolerance for angle
-                const isSlowVertical = Math.abs(velocity.y) < 0.2; // Doubled tolerance for vertical speed
-                const isSlowHorizontal = Math.abs(velocity.x) < 0.1; // Doubled tolerance for horizontal speed
-
-                const angleStyle = isVertical ? 'style="color: green; font-weight: bold;"' : 'style="color: red;"';
-                const verticalVelocityStyle = isSlowVertical ? 'style="color: green; font-weight: bold;"' : 'style="color: red;"';
-                const horizontalVelocityStyle = isSlowHorizontal ? 'style="color: green; font-weight: bold;"' : 'style="color: red;"';
-
-                const altitude = calculateAltitude(lander, heights, terrainWidth, terrainSegments);
-                const altitudeStyle = altitude > 0 ? 'style="color: green; font-weight: bold;"' : 'style="color: red;"';
-
-                // Check if above flat terrain
-                const isAboveFlat = isLanderAboveFlatTerrain(lander.position.x, flatPads);
-                const terrainFlatText = isAboveFlat ? 'Terrain: Flat' : 'Terrain: Uneven';
-                const terrainFlatStyle = isAboveFlat ? 'style="color: green; font-weight: bold;"' : 'style="color: red;"';
-
                 // Update flight time
                 flightTime += deltaTime;
-                const flightTimeStyle = 'style="color: lightgrey;"';
-
-                hud.innerHTML = `
-                    <span ${horizontalVelocityStyle}>Horizontal Velocity: ${velocity.x.toFixed(2)}</span><br>
-                    <span ${verticalVelocityStyle}>Vertical Velocity: ${velocity.y.toFixed(2)}</span><br>
-                    <span ${angleStyle}>Angle: ${(lander.rotation.z * (180 / Math.PI)).toFixed(2)}°</span><br>
-                    <span ${angleStyle}>Angular Velocity: ${(angularVelocity * (180 / Math.PI)).toFixed(2)}°/s</span><br>
-                    <span ${altitudeStyle}>Altitude: ${altitude.toFixed(2)}</span><br>
-                    <span ${terrainFlatStyle}>${terrainFlatText}</span><br>
-                    <span ${flightTimeStyle}>Flight Time: ${flightTime.toFixed(2)}s</span>
-                `;
 
                 // Apply gravity
                 velocity.add(gravity.clone().multiplyScalar(deltaTime));
@@ -641,6 +709,9 @@
                 camera.position.y = lander.position.y // CAMERA_INITIAL_POSITION_Y / heightFactor; // Adjust vertical position
 
                 camera.updateProjectionMatrix(); // Update the camera projection matrix
+
+                // Update instrumentation panel
+                updateInstrumentationPanel();
 
             }
 
