@@ -148,6 +148,10 @@
             color: white;
         }
 
+        .right-justify {
+            float: right;
+        }
+
         @media (min-width: 1024px) {
             .instrument .label {
                 font-size: 14px;
@@ -175,13 +179,14 @@
             <div id="ground-speed" class="value">0.00</div>
         </div>
         <div class="instrument">
-            <div class="label">Altitude:</div>
-            <div id="altitude" class="white-text value">0.00 <span id="approach-speed" class="grey-text">(0.00)</span>
+            <div class="label">Rate of Descent:</div>
+            <div id="approach-speed" class="value">0.00 <span id="altitude" class="grey-text right-justify">0.00</span>
             </div>
         </div>
         <div class="instrument">
             <div class="label">Attitude:</div>
-            <div id="attitude" class="value">0.00° <span id="angular-velocity" class="grey-text">(0.00°/s)</span></div>
+            <div id="attitude" class="value">0.00° <span id="angular-velocity"
+                    class="grey-text right-justify">0.00°/s</span></div>
         </div>
         <div class="instrument">
             <div class="label">Terrain:</div>
@@ -571,14 +576,14 @@
             const groundSpeed = velocity.x.toFixed(2);
             const approachSpeed = velocity.y.toFixed(2);
             const altitude = calculateAltitude(lander, heights, terrainWidth, terrainSegments).toFixed(2);
-            const attitude = (lander.rotation.z * (180 / Math.PI)).toFixed(2);
+            const attitude = Math.round(lander.rotation.z * (180 / Math.PI));
             const angularVelocityValue = (angularVelocity * (180 / Math.PI)).toFixed(2);
             const isAboveFlat = isLanderAboveFlatTerrain(lander.position.x, flatPads);
-            const flightTimeValue = flightTime.toFixed(2);
+            const flightTimeValue = flightTime.toFixed(1);
 
             document.getElementById('ground-speed').innerText = `${groundSpeed}m/s`;
-            document.getElementById('altitude').innerHTML = `${altitude}m <span id="approach-speed">(${approachSpeed}m/s)</span>`;
-            document.getElementById('attitude').innerHTML = `${attitude}° <span class="white-text">(${angularVelocityValue}°/s)</span>`;
+            document.getElementById('approach-speed').innerHTML = `${approachSpeed}m/s <span id="altitude" class="grey-text right-justify">${altitude}m</span>`;
+            document.getElementById('attitude').innerHTML = `${attitude}° <span id="angular-velocity" class="grey-text right-justify">${angularVelocityValue}°/s</span>`;
             document.getElementById('flight-time').innerText = `${flightTimeValue}s`;
 
             const terrainAlert = document.getElementById('terrain-alert');
@@ -594,7 +599,7 @@
 
             // Update colors based on landing conditions
             document.getElementById('ground-speed').className = Math.abs(groundSpeed) < 0.1 ? 'value green-zone' : 'value red-zone';
-            document.getElementById('approach-speed').className = Math.abs(approachSpeed) < 0.2 ? 'green-zone' : 'red-zone';
+            document.getElementById('approach-speed').className = Math.abs(approachSpeed) < 0.2 ? 'value green-zone' : 'value red-zone';
             document.getElementById('attitude').className = Math.abs(attitude) < 6 ? 'value green-zone' : 'value red-zone';
         }
 
