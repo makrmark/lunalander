@@ -168,7 +168,7 @@
                 "three": "https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.module.js"            }
         }
     </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/15.1.3/Tone.js"></script>
 </head>
 
 <body>
@@ -604,43 +604,48 @@
             document.getElementById('attitude').className = Math.abs(attitude) < 6 ? 'value green-zone' : 'value red-zone';
         }
 
-        // Create Howl instances for the rocket, landing, and crashing sounds
-        const rocketSound = new Howl({
-            src: ['rocket.mp3'],
-            loop: true,
-            volume: 1.0
-        });
+        // Create synths for sound effects
+        const rocketSynth = new Tone.NoiseSynth({
+            noise: {
+                type: "white",
+                playbackRate: 1
+            },
+            envelope: {
+                attack: 0.01,
+                decay: 0.2,
+                sustain: 0.5,
+                release: 0.5
+            }
+        }).toDestination();
 
-        const landingSound = new Howl({
-            src: ['land.mp3'],
-            volume: 1.0
-        });
+        const landingSynth = new Tone.Synth().toDestination();
+        const crashSynth = new Tone.Synth().toDestination();
 
-        const crashSound = new Howl({
-            src: ['crash.mp3'],
-            volume: 1.0
-        });
+        // Set volume levels
+        rocketSynth.volume.value = -12; // Rocket sound quieter
+        landingSynth.volume.value = 0;  // Landing sound louder
+        crashSynth.volume.value = 0;    // Crash sound louder
 
         // Function to play the rocket sound
         function playRocketSound() {
-            if (!rocketSound.playing()) {
-                rocketSound.play();
-            }
+            rocketSynth.triggerAttack();
         }
 
         // Function to stop the rocket sound
         function stopRocketSound() {
-            rocketSound.stop();
+            rocketSynth.triggerRelease();
         }
 
         // Function to play the landing sound
         function playLandingSound() {
-            landingSound.play();
+            landingSynth.triggerAttackRelease("C6", "8n");
+            landingSynth.triggerAttackRelease("E6", "8n", "+0.2");
         }
 
         // Function to play the crashing sound
         function playCrashSound() {
-            crashSound.play();
+            crashSynth.triggerAttackRelease("C2", "8n");
+            crashSynth.triggerAttackRelease("A1", "8n", "+0.2");
         }
 
         // Animation loop
