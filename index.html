@@ -628,6 +628,7 @@
 
         // Function to play the rocket sound
         function playRocketSound() {
+            stopRocketSound(); // Stop the sound before playing again
             rocketSynth.triggerAttack();
         }
 
