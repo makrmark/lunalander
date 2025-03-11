@@ -168,6 +168,7 @@
                 "three": "https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.module.js"            }
         }
     </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/15.1.3/Tone.js"></script>
 </head>
 
 <body>
@@ -603,6 +604,51 @@
             document.getElementById('attitude').className = Math.abs(attitude) < 6 ? 'value green-zone' : 'value red-zone';
         }
 
+        // Create a synth for the rocket sound
+        const rocketSynth = new Tone.NoiseSynth({
+            noise: {
+                type: "white",
+                playbackRate: 1
+            },
+            envelope: {
+                attack: 0.01,
+                decay: 0.2,
+                sustain: 0.5,
+                release: 0.5
+            }
+        }).toDestination();
+
+        // Create synths for landing and crashing sounds
+        const landingSynth = new Tone.Synth().toDestination();
+        const crashSynth = new Tone.Synth().toDestination();
+
+        // Set volume levels
+        rocketSynth.volume.value = -12; // Rocket sound quieter
+        landingSynth.volume.value = 0; // Landing sound louder
+        crashSynth.volume.value = 0; // Crash sound louder
+
+        // Function to play the rocket sound
+        function playRocketSound() {
+            rocketSynth.triggerAttack();
+        }
+
+        // Function to stop the rocket sound
+        function stopRocketSound() {
+            rocketSynth.triggerRelease();
+        }
+
+        // Function to play the landing sound
+        function playLandingSound() {
+            landingSynth.triggerAttackRelease("C6", "8n");
+            landingSynth.triggerAttackRelease("E6", "8n", "+0.2");
+        }
+
+        // Function to play the crashing sound
+        function playCrashSound() {
+            crashSynth.triggerAttackRelease("C2", "8n");
+            crashSynth.triggerAttackRelease("A1", "8n", "+0.2");
+        }
+
         // Animation loop
         function animate() {
             requestAnimationFrame(animate);
@@ -615,18 +661,22 @@
                     console.log('Firing left rocket'); // Debugging log
                     leftFlame.visible = true; // Show left flame when rotating clockwise
                     leftFlameLight.visible = true; // Show left flame light when rotating clockwise
+                    playRocketSound(); // Play rocket sound
                 } else {
                     leftFlame.visible = false; // Hide left flame when not rotating clockwise
                     leftFlameLight.visible = false; // Hide left flame light when not rotating clockwise
+                    stopRocketSound(); // Stop rocket sound
                 }
                 if (keys['d']) {
                     angularVelocity -= torque * deltaTime; // Rotate counterclockwise
                     console.log('Firing right rocket'); // Debugging log
                     rightFlame.visible = true; // Show right flame when rotating counterclockwise
                     rightFlameLight.visible = true; // Show right flame light when rotating counterclockwise
+                    playRocketSound(); // Play rocket sound
                 } else {
                     rightFlame.visible = false; // Hide right flame when not rotating counterclockwise
                     rightFlameLight.visible = false; // Hide right flame light when not rotating counterclockwise
+                    stopRocketSound(); // Stop rocket sound
                 }
                 if (keys['s']) {
                     const thrustVector = new THREE.Vector3(0, thrust, 0).applyQuaternion(lander.quaternion);
@@ -634,9 +684,11 @@
                     console.log('Applying thrust'); // Debugging log
                     flame.visible = true; // Show flame when thrusting
                     mainFlameLight.visible = true; // Show main flame light when thrusting
+                    playRocketSound(); // Play rocket sound
                 } else {
                     flame.visible = false; // Hide flame when not thrusting
                     mainFlameLight.visible = false; // Hide main flame light when not thrusting
+                    stopRocketSound(); // Stop rocket sound
                 }
 
                 // Flashing indicator light
@@ -681,10 +733,12 @@
                             document.getElementById('message').innerHTML = 'The Eagle Has Landed<br><button id="play-again" onclick="reloadGame()">Play Again</button>';
                             document.getElementById('message').style.display = 'block';
                             createRainbowStars();
+                            playLandingSound(); // Play landing sound
                         } else {
                             gameState = 'crashed';
                             lander.rotation.z = Math.PI / 2; // Flip the lander on its side
                             flashCrashIndicator();
+                            playCrashSound(); // Play crash sound
                         }
                     }
                 }
@@ -699,6 +753,7 @@
                             gameState = 'crashed';
                             lander.rotation.z = Math.PI / 2; // Flip the lander on its side
                             flashCrashIndicator();
+                            playCrashSound(); // Play crash sound
                         }
                     }
                 });
