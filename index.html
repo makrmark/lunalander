@@ -606,18 +606,18 @@
 
         // Create Howl instances for the rocket, landing, and crashing sounds
         const rocketSound = new Howl({
-            src: ['rocket.wav'],
+            src: ['rocket.mp3'],
             loop: true,
             volume: 1.0
         });
 
         const landingSound = new Howl({
-            src: ['land.wav'],
+            src: ['land.mp3'],
             volume: 1.0
         });
 
         const crashSound = new Howl({
-            src: ['crash.wav'],
+            src: ['crash.mp3'],
             volume: 1.0
         });
 
@@ -659,7 +659,6 @@
                 } else {
                     leftFlame.visible = false; // Hide left flame when not rotating clockwise
                     leftFlameLight.visible = false; // Hide left flame light when not rotating clockwise
-                    stopRocketSound(); // Stop rocket sound
                 }
                 if (keys['d']) {
                     angularVelocity -= torque * deltaTime; // Rotate counterclockwise
@@ -670,7 +669,6 @@
                 } else {
                     rightFlame.visible = false; // Hide right flame when not rotating counterclockwise
                     rightFlameLight.visible = false; // Hide right flame light when not rotating counterclockwise
-                    stopRocketSound(); // Stop rocket sound
                 }
                 if (keys['s']) {
                     const thrustVector = new THREE.Vector3(0, thrust, 0).applyQuaternion(lander.quaternion);
@@ -682,7 +680,10 @@
                 } else {
                     flame.visible = false; // Hide flame when not thrusting
                     mainFlameLight.visible = false; // Hide main flame light when not thrusting
-                    stopRocketSound(); // Stop rocket sound
+                }
+
+                if (!keys['s'] && !keys['d'] && !keys['a']) {
+                    stopRocketSound(); // Stop rocket sound when not thrusting or rotating
                 }
 
                 // Flashing indicator light
@@ -727,11 +728,13 @@
                             document.getElementById('message').innerHTML = 'The Eagle Has Landed<br><button id="play-again" onclick="reloadGame()">Play Again</button>';
                             document.getElementById('message').style.display = 'block';
                             createRainbowStars();
+                            stopRocketSound(); // Stop rocket sound when not thrusting or rotating
                             playLandingSound(); // Play landing sound
                         } else {
                             gameState = 'crashed';
                             lander.rotation.z = Math.PI / 2; // Flip the lander on its side
                             flashCrashIndicator();
+                            stopRocketSound(); // Stop rocket sound
                             playCrashSound(); // Play crash sound
                         }
                     }
@@ -747,6 +750,7 @@
                             gameState = 'crashed';
                             lander.rotation.z = Math.PI / 2; // Flip the lander on its side
                             flashCrashIndicator();
+                            stopRocketSound(); // Stop rocket sound when not thrusting or rotating
                             playCrashSound(); // Play crash sound
                         }
                     }
