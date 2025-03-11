@@ -165,10 +165,10 @@
     <script type="importmap">
         {
             "imports": {
-                "three": "https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.module.js"            }
+                "three": "https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.module.js"
+            }
         }
     </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/15.1.3/Tone.js"></script>
 </head>
 
 <body>
@@ -604,49 +604,134 @@
             document.getElementById('attitude').className = Math.abs(attitude) < 6 ? 'value green-zone' : 'value red-zone';
         }
 
-        // Create synths for sound effects
-        const rocketSynth = new Tone.NoiseSynth({
-            noise: {
-                type: "white",
-                playbackRate: 1
-            },
-            envelope: {
-                attack: 0.01,
-                decay: 0.2,
-                sustain: 0.5,
-                release: 0.1
+        // Sound Manager Class
+        class SoundManager {
+            constructor() {
+                this.audioContext = null;
+                this.sounds = {};
+                this.isPlaying = false;
+                this.rocketSound = null;
             }
-        }).toDestination();
 
-        const landingSynth = new Tone.Synth().toDestination();
-        const crashSynth = new Tone.Synth().toDestination();
+            async init() {
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.audioContext = new AudioContext();
 
-        // Set volume levels
-        rocketSynth.volume.value = -12; // Rocket sound quieter
-        landingSynth.volume.value = 0;  // Landing sound louder
-        crashSynth.volume.value = 0;    // Crash sound louder
+                    // Load all sounds
+                    await Promise.all([
+                        this.loadSound('rocket', 'rocket-loop.mp3'),
+                        this.loadSound('landing', 'success.mp3'),
+                        this.loadSound('crash', 'crash.mp3')
+                    ]);
 
-        // Function to play the rocket sound
+                    console.log('Sound system initialized');
+                } catch (error) {
+                    console.error('Sound initialization failed:', error);
+                }
+            }
+
+            async loadSound(name, url) {
+                try {
+                    const response = await fetch(url);
+                    const arrayBuffer = await response.arrayBuffer();
+                    const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+                    this.sounds[name] = audioBuffer;
+                } catch (error) {
+                    console.error(`Failed to load sound ${name}:`, error);
+                }
+            }
+
+            playRocket() {
+                if (!this.audioContext || this.isPlaying) return;
+
+                try {
+                    const source = this.audioContext.createBufferSource();
+                    source.buffer = this.sounds.rocket;
+                    source.loop = true;
+
+                    // Add gain node for volume control
+                    const gainNode = this.audioContext.createGain();
+                    gainNode.gain.value = 0.3; // 30% volume
+
+                    source.connect(gainNode);
+                    gainNode.connect(this.audioContext.destination);
+
+                    if (this.audioContext.state === 'suspended') {
+                        this.audioContext.resume();
+                    }
+
+                    source.start(0);
+                    this.rocketSound = source;
+                    this.isPlaying = true;
+                } catch (error) {
+                    console.error('Error playing rocket sound:', error);
+                }
+            }
+
+            stopRocket() {
+                if (!this.rocketSound) return;
+
+                try {
+                    this.rocketSound.stop();
+                    this.rocketSound = null;
+                    this.isPlaying = false;
+                } catch (error) {
+                    console.error('Error stopping rocket sound:', error);
+                }
+            }
+
+            playOneShot(name) {
+                if (!this.audioContext || !this.sounds[name]) return;
+
+                try {
+                    const source = this.audioContext.createBufferSource();
+                    source.buffer = this.sounds[name];
+
+                    const gainNode = this.audioContext.createGain();
+                    gainNode.gain.value = 0.5; // 50% volume
+
+                    source.connect(gainNode);
+                    gainNode.connect(this.audioContext.destination);
+
+                    if (this.audioContext.state === 'suspended') {
+                        this.audioContext.resume();
+                    }
+
+                    source.start(0);
+                } catch (error) {
+                    console.error(`Error playing ${name} sound:`, error);
+                }
+            }
+        }
+
+        // Create and initialize sound manager
+        const soundManager = new SoundManager();
+
+        // Initialize sound on user interaction
+        document.addEventListener('touchstart', () => {
+            soundManager.init();
+        }, { once: true });
+
+        document.addEventListener('keydown', () => {
+            soundManager.init();
+        }, { once: true });
+
+        // Function to play sounds through SoundManager
         function playRocketSound() {
-            stopRocketSound(); // Stop the sound before playing again
-            rocketSynth.triggerAttack();
+            soundManager.playRocket();
         }
 
-        // Function to stop the rocket sound
         function stopRocketSound() {
-            rocketSynth.triggerRelease();
+            soundManager.stopRocket();
         }
 
-        // Function to play the landing sound
         function playLandingSound() {
-            landingSynth.triggerAttackRelease("C6", "8n");
-            landingSynth.triggerAttackRelease("E6", "8n", "+0.2");
+            soundManager.playOneShot('landing');
         }
 
-        // Function to play the crashing sound
         function playCrashSound() {
-            crashSynth.triggerAttackRelease("C2", "8n");
-            crashSynth.triggerAttackRelease("A1", "8n", "+0.2");
+            soundManager.playOneShot('crash');
         }
 
         // Animation loop
@@ -656,12 +741,17 @@
 
             if (gameState === 'playing') {
                 // Apply controls
+                if (keys['a'] || keys['d'] || keys['s']) {
+                    playRocketSound();
+                } else {
+                    stopRocketSound();
+                }
+
                 if (keys['a']) {
                     angularVelocity += torque * deltaTime; // Rotate clockwise
                     console.log('Firing left rocket'); // Debugging log
                     leftFlame.visible = true; // Show left flame when rotating clockwise
                     leftFlameLight.visible = true; // Show left flame light when rotating clockwise
-                    playRocketSound(); // Play rocket sound
                 } else {
                     leftFlame.visible = false; // Hide left flame when not rotating clockwise
                     leftFlameLight.visible = false; // Hide left flame light when not rotating clockwise
@@ -671,7 +761,6 @@
                     console.log('Firing right rocket'); // Debugging log
                     rightFlame.visible = true; // Show right flame when rotating counterclockwise
                     rightFlameLight.visible = true; // Show right flame light when rotating counterclockwise
-                    playRocketSound(); // Play rocket sound
                 } else {
                     rightFlame.visible = false; // Hide right flame when not rotating counterclockwise
                     rightFlameLight.visible = false; // Hide right flame light when not rotating counterclockwise
@@ -682,7 +771,6 @@
                     console.log('Applying thrust'); // Debugging log
                     flame.visible = true; // Show flame when thrusting
                     mainFlameLight.visible = true; // Show main flame light when thrusting
-                    playRocketSound(); // Play rocket sound
                 } else {
                     flame.visible = false; // Hide flame when not thrusting
                     mainFlameLight.visible = false; // Hide main flame light when not thrusting
