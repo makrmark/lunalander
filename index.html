@@ -591,11 +591,151 @@
             return landerMinY - terrainHeight;
         }
 
-        // Function to restart the game
-        window.reloadGame = function () {
-            location.reload(); // Reload the page to restart the game from the beginning
+        // Function to generate terrain
+        function generateTerrain() {
+            const heights = [];
+            const flatPads = [];
+            let isFlat = false;
+            let startFlat = 0;
+
+            // Generate terrain heights and flat pads
+            for (let i = 0; i <= terrainSegments; i++) {
+                const x = i * terrainWidth / terrainSegments - terrainWidth / 2;
+                const padCycle = Math.floor((x + terrainWidth / 2) / 4);
+                if (padCycle % 2 === 0) {
+                    heights[i] = Math.sin(x / 20) * 0.5 + (Math.random() > 0.8 ? -2 : 0);
+                    if (isFlat) {
+                        flatPads.push([startFlat, x - terrainWidth / terrainSegments]);
+                        isFlat = false;
+                    }
+                } else {
+                    if (!isFlat) {
+                        startFlat = x;
+                        isFlat = true;
+                    }
+                    heights[i] = 0;
+                }
+            }
+            if (isFlat) {
+                flatPads.push([startFlat, terrainWidth / 2]);
+            }
+            return { heights, flatPads };
         }
 
+        // Function to generate stars
+        function generateStars() {
+            const starPositions = [];
+            for (let i = 0; i < 1000; i++) {
+                const x = (Math.random() - 0.5) * 2000;
+                const y = (Math.random() - 0.5) * 2000;
+                const z = (Math.random() - 0.5) * 2000;
+                starPositions.push(x, y, z);
+            }
+            return starPositions;
+        }
+
+        // Function to reset the game
+        window.resetGame = function () {
+            // Reset physics
+            velocity.copy(INITIAL_STATE.velocity);
+            angularVelocity = INITIAL_STATE.angularVelocity;
+
+            // Reset lander position and rotation
+            lander.position.copy(INITIAL_STATE.position);
+            lander.rotation.copy(INITIAL_STATE.rotation);
+
+            // Reset camera
+            camera.position.set(0, CAMERA_INITIAL_POSITION_Y, CAMERA_INITIAL_POSITION_Z * 1.2);
+
+            // Remove rainbow stars if they exist
+            if (rainbowStars) {
+                scene.remove(rainbowStars);
+                rainbowStars.geometry.dispose();
+                rainbowStars.material.dispose();
+                rainbowStars = null;
+            }
+
+            // Generate new terrain
+            const { heights: newHeights, flatPads: newFlatPads } = generateTerrain();
+            heights.length = 0;
+            heights.push(...newHeights);
+            flatPads.length = 0;
+            flatPads.push(...newFlatPads);
+
+            // Update terrain meshes
+            const terrainVertices = [];
+            const terrainIndices = [];
+            for (let i = 0; i <= terrainSegments; i++) {
+                const x = i * terrainWidth / terrainSegments - terrainWidth / 2;
+                terrainVertices.push(x, heights[i], 0);
+                terrainVertices.push(x, -10, 0);
+                if (i < terrainSegments) {
+                    const a = i * 2;
+                    const b = i * 2 + 1;
+                    const c = (i + 1) * 2;
+                    const d = (i + 1) * 2 + 1;
+                    terrainIndices.push(a, b, c);
+                    terrainIndices.push(b, d, c);
+                }
+            };
+
+            // Update terrain geometries
+            [terrain, backgroundTerrain, foregroundTerrain].forEach((mesh) => {
+                mesh.geometry.setAttribute('position', new THREE.Float32BufferAttribute(terrainVertices, 3));
+                mesh.geometry.setIndex(terrainIndices);
+                mesh.geometry.computeVertexNormals();
+            });
+
+            // Add vertex displacement for background/foreground
+            const backgroundPositions = backgroundTerrain.geometry.attributes.position.array;
+            const foregroundPositions = foregroundTerrain.geometry.attributes.position.array;
+            for (let i = 0; i < backgroundPositions.length; i += 3) {
+                backgroundPositions[i + 1] += (Math.random() - 0.5) * 0.5;
+                foregroundPositions[i + 1] += (Math.random() - 0.5) * 0.3;
+            }
+
+            // Remove existing rocks
+            scene.children.forEach(child => {
+                if (child.geometry instanceof THREE.SphereGeometry) {
+                    scene.remove(child);
+                }
+            });
+
+            // Add new rocks
+            for (let i = 0; i < 50; i++) {
+                const x = (Math.random() - 0.5) * terrainWidth;
+                let isOnFlat = false;
+                for (const pad of flatPads) {
+                    if (x >= pad[0] && x <= pad[1]) {
+                        isOnFlat = true;
+                        break;
+                    }
+                }
+                if (!isOnFlat) {
+                    const terrainXIndex = Math.floor((x + terrainWidth / 2) / (terrainWidth / terrainSegments));
+                    const y = heights[terrainXIndex];
+                    const rockGeometry = new THREE.SphereGeometry(Math.random() * 0.5 + 0.2, 8, 8);
+                    const rockMaterial = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.8, metalness: 0.2 });
+                    const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+                    rock.position.set(x, y + rockGeometry.parameters.radius, 0);
+                    scene.add(rock);
+                }
+            }
+
+            // Generate new stars
+            const newStarPositions = generateStars();
+            stars.geometry.setAttribute('position', new THREE.Float32BufferAttribute(newStarPositions, 3));
+
+            // Reset game state
+            gameState = 'playing';
+            flightTime = 0;
+
+            // Clear message
+            document.getElementById('message').style.display = 'none';
+
+            // Stop all sounds
+            stopRocketSound();
+        }
         // Function to flash a circular shape over the lander
         function flashCrashIndicator() {
             const crashIndicatorGeometry = new THREE.CircleGeometry(1, 32);
@@ -611,7 +751,7 @@
                 if (flashCount >= 6) { // Flash three times
                     clearInterval(flashInterval);
                     scene.remove(crashIndicator);
-                    document.getElementById('message').innerHTML = 'Game Over<br><button id="play-again" onclick="reloadGame();">Play Again</button>';
+                    document.getElementById('message').innerHTML = 'Game Over<br><button id="play-again" onclick="resetGame();">Play Again</button>';
                     document.getElementById('message').style.display = 'block';
                 }
             }, 200);
@@ -896,19 +1036,9 @@
                         const isSlowVertical = Math.abs(velocity.y) < 0.2; // Doubled tolerance for vertical speed
                         const isSlowHorizontal = Math.abs(velocity.x) < 0.1; // Doubled tolerance for horizontal speed
                         if (isOnFlat && isVertical && isSlowVertical && isSlowHorizontal) {
-                            gameState = 'landed';
-                            lander.rotation.z = 0; // Make the lander vertical
-                            document.getElementById('message').innerHTML = 'The Eagle Has Landed<br><button id="play-again" onclick="reloadGame()">Play Again</button>';
-                            document.getElementById('message').style.display = 'block';
-                            createRainbowStars();
-                            stopRocketSound(); // Stop rocket sound when not thrusting or rotating
-                            playLandingSound(); // Play landing sound
+                            handleSuccessfulLanding();
                         } else {
-                            gameState = 'crashed';
-                            lander.rotation.z = Math.PI / 2; // Flip the lander on its side
-                            flashCrashIndicator();
-                            stopRocketSound(); // Stop rocket sound
-                            playCrashSound(); // Play crash sound
+                            handleCrash();
                         }
                     }
                 }
@@ -977,6 +1107,50 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
+
+        // After the game state variables, add:
+        const INITIAL_STATE = {
+            velocity: new THREE.Vector3(1, 0, 0),
+            position: new THREE.Vector3(0, LANDER_INITIAL_Y, 0),
+            rotation: new THREE.Euler(0, 0, 0),
+            angularVelocity: 0,
+            flightTime: 0,
+            gameState: 'playing'
+        };
+
+        // Update landing and crash handlers to use window.resetGame
+        function handleSuccessfulLanding() {
+            gameState = 'landed';
+            lander.rotation.z = 0;
+            document.getElementById('message').innerHTML = 'The Eagle Has Landed<br><button id="play-again" onclick="resetGame()">Play Again</button>';
+            document.getElementById('message').style.display = 'block';
+            createRainbowStars();
+            stopRocketSound();
+            playLandingSound();
+        }
+
+        function handleCrash() {
+            gameState = 'crashed';
+            lander.rotation.z = Math.PI / 2;
+            flashCrashIndicator();
+            stopRocketSound();
+            playCrashSound();
+        }
+
+        // Update collision checks in animate loop to use new handlers
+        // Replace the collision check code with:
+        if (calculateAltitude(lander, heights, terrainWidth, terrainSegments) <= 0) {
+            const isOnFlat = isLanderAboveFlatTerrain(landerX, flatPads);
+            const isVertical = Math.abs(lander.rotation.z) < Math.PI / 180 * 6;
+            const isSlowVertical = Math.abs(velocity.y) < 0.2;
+            const isSlowHorizontal = Math.abs(velocity.x) < 0.1;
+
+            if (isOnFlat && isVertical && isSlowVertical && isSlowHorizontal) {
+                handleSuccessfulLanding();
+            } else {
+                handleCrash();
+            }
+        }
     </script>
 </body>
 
