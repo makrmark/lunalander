@@ -608,37 +608,18 @@
         class SoundManager {
             constructor() {
                 this.audioContext = null;
-                this.sounds = {};
                 this.isPlaying = false;
-                this.rocketSound = null;
+                this.rocketSource = null;
+                this.rocketGain = null;
             }
 
             async init() {
                 try {
                     const AudioContext = window.AudioContext || window.webkitAudioContext;
                     this.audioContext = new AudioContext();
-
-                    // Load all sounds
-                    await Promise.all([
-                        this.loadSound('rocket', 'rocket-loop.mp3'),
-                        this.loadSound('landing', 'success.mp3'),
-                        this.loadSound('crash', 'crash.mp3')
-                    ]);
-
                     console.log('Sound system initialized');
                 } catch (error) {
                     console.error('Sound initialization failed:', error);
-                }
-            }
-
-            async loadSound(name, url) {
-                try {
-                    const response = await fetch(url);
-                    const arrayBuffer = await response.arrayBuffer();
-                    const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-                    this.sounds[name] = audioBuffer;
-                } catch (error) {
-                    console.error(`Failed to load sound ${name}:`, error);
                 }
             }
 
@@ -646,23 +627,33 @@
                 if (!this.audioContext || this.isPlaying) return;
 
                 try {
-                    const source = this.audioContext.createBufferSource();
-                    source.buffer = this.sounds.rocket;
-                    source.loop = true;
-
-                    // Add gain node for volume control
-                    const gainNode = this.audioContext.createGain();
-                    gainNode.gain.value = 0.3; // 30% volume
-
-                    source.connect(gainNode);
-                    gainNode.connect(this.audioContext.destination);
-
-                    if (this.audioContext.state === 'suspended') {
-                        this.audioContext.resume();
+                    // Create noise for rocket sound
+                    const bufferSize = 2 * this.audioContext.sampleRate;
+                    const noiseBuffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+                    const output = noiseBuffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) {
+                        output[i] = Math.random() * 2 - 1;
                     }
 
-                    source.start(0);
-                    this.rocketSound = source;
+                    this.rocketSource = this.audioContext.createBufferSource();
+                    this.rocketSource.buffer = noiseBuffer;
+                    this.rocketSource.loop = true;
+
+                    // Add filter to shape the noise
+                    const filter = this.audioContext.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.value = 400;
+                    filter.Q.value = 1;
+
+                    // Add gain node for volume control
+                    this.rocketGain = this.audioContext.createGain();
+                    this.rocketGain.gain.value = 0.1; // 10% volume
+
+                    this.rocketSource.connect(filter);
+                    filter.connect(this.rocketGain);
+                    this.rocketGain.connect(this.audioContext.destination);
+
+                    this.rocketSource.start(0);
                     this.isPlaying = true;
                 } catch (error) {
                     console.error('Error playing rocket sound:', error);
@@ -670,37 +661,84 @@
             }
 
             stopRocket() {
-                if (!this.rocketSound) return;
+                if (!this.rocketSource) return;
 
                 try {
-                    this.rocketSound.stop();
-                    this.rocketSound = null;
-                    this.isPlaying = false;
+                    // Fade out
+                    if (this.rocketGain) {
+                        this.rocketGain.gain.setValueAtTime(this.rocketGain.gain.value, this.audioContext.currentTime);
+                        this.rocketGain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.1);
+                    }
+                    // Stop after fade
+                    setTimeout(() => {
+                        if (this.rocketSource) {
+                            this.rocketSource.stop();
+                            this.rocketSource = null;
+                        }
+                        this.isPlaying = false;
+                    }, 100);
                 } catch (error) {
                     console.error('Error stopping rocket sound:', error);
                 }
             }
 
-            playOneShot(name) {
-                if (!this.audioContext || !this.sounds[name]) return;
+            playLandingSound() {
+                if (!this.audioContext) return;
 
                 try {
-                    const source = this.audioContext.createBufferSource();
-                    source.buffer = this.sounds[name];
+                    // Create success sound (ascending arpeggio)
+                    const notes = [261.63, 329.63, 392.00, 523.25]; // C4, E4, G4, C5
+                    notes.forEach((freq, i) => {
+                        const oscillator = this.audioContext.createOscillator();
+                        const gain = this.audioContext.createGain();
 
-                    const gainNode = this.audioContext.createGain();
-                    gainNode.gain.value = 0.5; // 50% volume
+                        oscillator.type = 'sine';
+                        oscillator.frequency.value = freq;
 
-                    source.connect(gainNode);
-                    gainNode.connect(this.audioContext.destination);
+                        gain.gain.value = 0.1;
 
-                    if (this.audioContext.state === 'suspended') {
-                        this.audioContext.resume();
+                        oscillator.connect(gain);
+                        gain.connect(this.audioContext.destination);
+
+                        oscillator.start(this.audioContext.currentTime + i * 0.1);
+                        oscillator.stop(this.audioContext.currentTime + i * 0.1 + 0.2);
+                    });
+                } catch (error) {
+                    console.error('Error playing landing sound:', error);
+                }
+            }
+
+            playCrashSound() {
+                if (!this.audioContext) return;
+
+                try {
+                    // Create crash sound (noise burst with decay)
+                    const bufferSize = this.audioContext.sampleRate * 0.5;
+                    const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+                    const output = buffer.getChannelData(0);
+
+                    for (let i = 0; i < bufferSize; i++) {
+                        output[i] = Math.random() * 2 - 1;
+                        // Apply decay
+                        output[i] *= 1 - (i / bufferSize);
                     }
 
-                    source.start(0);
+                    const source = this.audioContext.createBufferSource();
+                    const gain = this.audioContext.createGain();
+                    const filter = this.audioContext.createBiquadFilter();
+
+                    source.buffer = buffer;
+                    gain.gain.value = 0.3;
+                    filter.type = 'lowpass';
+                    filter.frequency.value = 1000;
+
+                    source.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(this.audioContext.destination);
+
+                    source.start();
                 } catch (error) {
-                    console.error(`Error playing ${name} sound:`, error);
+                    console.error('Error playing crash sound:', error);
                 }
             }
         }
@@ -727,11 +765,11 @@
         }
 
         function playLandingSound() {
-            soundManager.playOneShot('landing');
+            soundManager.playLandingSound();
         }
 
         function playCrashSound() {
-            soundManager.playOneShot('crash');
+            soundManager.playCrashSound();
         }
 
         // Animation loop
@@ -774,10 +812,6 @@
                 } else {
                     flame.visible = false; // Hide flame when not thrusting
                     mainFlameLight.visible = false; // Hide main flame light when not thrusting
-                }
-
-                if (!keys['s'] && !keys['d'] && !keys['a']) {
-                    stopRocketSound(); // Stop rocket sound when not thrusting or rotating
                 }
 
                 // Flashing indicator light
