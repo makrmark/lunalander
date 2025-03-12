@@ -271,13 +271,58 @@
                 terrainIndices.push(b, d, c);
             }
         }
+
+        // Create terrain layers with different materials
         const terrainGeometry = new THREE.BufferGeometry();
         terrainGeometry.setAttribute('position', new THREE.Float32BufferAttribute(terrainVertices, 3));
         terrainGeometry.setIndex(terrainIndices);
         terrainGeometry.computeVertexNormals();
+
+        // Background layer (darkest, most blurred)
+        const backgroundGeometry = terrainGeometry.clone();
+        const backgroundPositions = backgroundGeometry.attributes.position.array;
+        // Add subtle random displacement to vertices for blur effect
+        for (let i = 0; i < backgroundPositions.length; i += 3) {
+            backgroundPositions[i + 1] += (Math.random() - 0.5) * 0.5; // Y displacement
+        }
+        const backgroundMaterial = new THREE.MeshBasicMaterial({
+            color: 0x333333,
+            wireframe: false,
+            flatShading: true
+        });
+        const backgroundTerrain = new THREE.Mesh(backgroundGeometry, backgroundMaterial);
+        backgroundTerrain.position.z = -5;
+        backgroundTerrain.scale.set(1.2, 1.2, 1);
+        scene.add(backgroundTerrain);
+
+        // Middle layer (main terrain)
         const terrainMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
         const terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
+        terrain.position.z = 0;
         scene.add(terrain);
+
+        // Foreground layer (lighter, blurred)
+        const foregroundGeometry = terrainGeometry.clone();
+        const foregroundPositions = foregroundGeometry.attributes.position.array;
+        // Add less pronounced random displacement for foreground blur
+        for (let i = 0; i < foregroundPositions.length; i += 3) {
+            foregroundPositions[i + 1] -= (Math.random() - 0.5) * 0.3; // Y displacement
+        }
+        const foregroundMaterial = new THREE.MeshBasicMaterial({
+            color: 0xcccccc,
+            wireframe: false,
+            flatShading: true
+        });
+        const foregroundTerrain = new THREE.Mesh(foregroundGeometry, foregroundMaterial);
+        foregroundTerrain.position.z = 2;
+        foregroundTerrain.scale.set(0.8, 0.8, 1);
+        scene.add(foregroundTerrain);
+
+        // Update camera to handle the new depth
+        camera.position.z = CAMERA_INITIAL_POSITION_Z * 1.2; // Move camera back slightly
+        camera.near = 0.1;
+        camera.far = 2000;
+        camera.updateProjectionMatrix();
 
         // Add rocks on uneven terrain
         for (let i = 0; i < 50; i++) {
@@ -898,6 +943,10 @@
 
                 // Update instrumentation panel
                 updateInstrumentationPanel();
+
+                // Update terrain layers to follow camera
+                backgroundTerrain.position.x = camera.position.x * 0.8;
+                foregroundTerrain.position.x = camera.position.x * 1.1;
 
             }
 
